@@ -14,7 +14,6 @@ library(ggplot2)
 library(patchwork)
 
 
-registerDoParallel(cores = detectCores())
 
 
 rename <- function(dat, option){
@@ -439,7 +438,7 @@ AUC_boot_paralell <- function(TP, FP, FN, TN, B=2000, alpha=0.95)
   {
   N <- length(TP)
   p <- 2
-  
+
   
   
   
@@ -497,6 +496,8 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
                            AUC.CI.object = NULL, # if you have already done auc ci calculation and have the results  as an object, place it here for faster implementation
                            magnify = 2 # argument to magnify weight size of point estimates in the sroc
 ){
+  n.cores <- detectCores() - 1
+  registerDoParallel(cores = n.cores)
   ellipse.lty <- 0
   if (plot.ellipse){
     ellipse.lty <- 2
@@ -812,6 +813,7 @@ PBS3 <- function(y,S,b0,V0){
 
 
 MVPBT_boot <- function(y, S, B = 2000) {
+
   V0 <- mvmeta::mvmeta(y, S)$Psi
   Q0 <- MVPBT::MVPBT2(y, S)
   
@@ -840,6 +842,8 @@ MVPBT_boot <- function(y, S, B = 2000) {
 
 
 pubbias.diag <- function(dat, n.boots = 1000){
+  n.cores <- detectCores() - 1
+  registerDoParallel(cores = n.cores)
   dat <- dat[which(!is.na(dat[["TP"]]) & !is.na(dat[["TN"]]) & !is.na(dat[["FP"]]) & !is.na(dat[["FN"]])), ]
   dta.dat <- edta(TP = dat[["TP"]], FN = dat[["FN"]], TN = dat[["TN"]], FP = dat[["FP"]])
   oldpar <- par(mfrow=c(1,1))
