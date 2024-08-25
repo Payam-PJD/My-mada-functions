@@ -939,10 +939,6 @@ multiple.LRmats <- function(dat,
                             points.colors = c("#0000FF20", "#A52A2A20","#1d1c1c20" ,"#20cb2020" ,"#87ceeb30", "#ff000350"),
                             inset_var = -.4
 ){
-  # dat <- dat.overall.IEcombined
-  # subgrouping.variable <- dat.overall.IEcombined$IESG
-  # sum.colors = c("blue", "maroon", "black", "#20cb20", "skyblue", "red")
-  # points.colors = c("#0000FF20", "#A52A2A20","#1d1c1c20" ,"#20cb2020", "#87ceeb30", "#ff000350")
   if (is.null(subgrouping.variable)){
     dat[["subgrouping.variable"]] <- "Pooled"
   }else{
@@ -1355,10 +1351,14 @@ nomogrammer <- function(Prevalence,
 
 
 
-nomogrammer_plus <- function(dat, prevalence, x_var = .75, y_var = 2, return.list = F) {
+nomogrammer_plus <- function(dat, prevalence, x_var = .75, y_var = 2, return.list = F, alphabet = T) {
   posLR <- summary(SummaryPts(reitsma(dat, method = "ml")))["posLR", 1]
   negLR <- summary(SummaryPts(reitsma(dat, method = "ml")))["negLR", 1]
-  alphabet <- c("A", "B", "C", "D", "E", "F")
+  if (alphabet){
+      alphabet <- c("A", "B", "C", "D", "E", "F")
+    } else {
+      alphabet <- c("", "", "", "", "", "")
+    }
   
   plots <- list() # List to store ggplot objects
   for(PR in seq_along(prevalence)) {
@@ -1382,12 +1382,17 @@ nomogrammer_plus <- function(dat, prevalence, x_var = .75, y_var = 2, return.lis
   
 
 
-nomogrammer_cutoffs <- function(DM_object, cutoffs = DM_object$optcut, x_var = .75, y_var = 2, prevalence = 0.1, return.list = F){
+nomogrammer_cutoffs <- function(DM_object, cutoffs = DM_object$optcut, x_var = .75, y_var = 2, prevalence = 0.1, return.list = F, alphabet = T){
   LRs <- list()
   LRs$pos <- list()
   LRs$neg <- list()
   diagstat_object <- diagstats(DM_object, cutoff = cutoffs)
-  alphabet <- c("", "", "", "", "", "")
+  if (alphabet){
+      alphabet <- c("A", "B", "C", "D", "E", "F")
+    } else {
+      alphabet <- c("", "", "", "", "", "")
+    }
+  
   plots <- list()
   for (co in 1:length(cutoffs)){
     LRs$pos[co] <- diagstat_object[co, 2]/(1 - diagstat_object[co, 6])
@@ -1640,7 +1645,7 @@ forest.diag.wrapper <- function(dat,
                                 spec.forest = F,
                                 plot.het = F,
                                 calcwidth.addline.opt = T,
-                                dso)
+                                dso)  
 {
   dat[["lcols1"]] <- lcols1
   dat[["lcols2"]] <- lcols2
