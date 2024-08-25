@@ -1503,28 +1503,6 @@ if(return.list){
 
 
 
-metaprop.sens <- metaprop(data = dat,
-                          studlab = dat[["names"]],
-                          event = dat[["TP"]],
-                          n = dat[["TP"]] + dat[["FN"]], method.tau =  "ml",
-                          sm = "PRAW",
-                          outclab = "sensitivity",
-                          method.ci = "WS",
-                          common = FALSE)
-metaprop.spec <- metaprop(data = dat,
-                          studlab = dat[["names"]],
-                          event = dat[["TN"]],
-                          n = dat[["TN"]] + dat[["FP"]], method.tau =  "ml",
-                          sm = "PRAW",
-                          outclab = "specificity",
-                          method.ci = "WS",
-                          common = FALSE)
-
-
-
-
-
-
 forest.cutoffs <- function(dat,
                            cutoff,
                            lcols1 = cutoff,
