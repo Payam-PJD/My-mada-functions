@@ -697,7 +697,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
   }else{
     summary(reitsmas$reitsma.overall)
   }
- closeAllConnections() 
+ closeAllConnections(all =T) 
 }
 
 dta.outliers.single <- function(dat,
@@ -861,7 +861,7 @@ pubbias.diag <- function(dat, n.boots = 1000){
   detach(dta.dat)
   par(oldpar)
   return(MVPBT3.dat)
-  closeAllConnections()
+  closeAllConnections(all = T)
 }
 
 
