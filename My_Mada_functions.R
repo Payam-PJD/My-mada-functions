@@ -496,6 +496,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
                            AUC.CI.object = NULL, # if you have already done auc ci calculation and have the results  as an object, place it here for faster implementation
                            magnify = 2 # argument to magnify weight size of point estimates in the sroc
 ){
+  on.exit(eval(quote(closeAllConnections()), envir = .GlobalEnv))
   n.cores <- detectCores() - 1
   registerDoParallel(cores = n.cores)
   ellipse.lty <- 0
@@ -697,7 +698,6 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
   }else{
     summary(reitsmas$reitsma.overall)
   }
- closeAllConnections(all =T) 
 }
 
 dta.outliers.single <- function(dat,
@@ -842,6 +842,7 @@ MVPBT_boot <- function(y, S, B = 2000) {
 
 
 pubbias.diag <- function(dat, n.boots = 1000){
+  on.exit(eval(quote(closeAllConnections()), envir = .GlobalEnv))
   n.cores <- detectCores() - 1
   registerDoParallel(cores = n.cores)
   dat <- dat[which(!is.na(dat[["TP"]]) & !is.na(dat[["TN"]]) & !is.na(dat[["FP"]]) & !is.na(dat[["FN"]])), ]
@@ -861,7 +862,6 @@ pubbias.diag <- function(dat, n.boots = 1000){
   detach(dta.dat)
   par(oldpar)
   return(MVPBT3.dat)
-  closeAllConnections(all = T)
 }
 
 
