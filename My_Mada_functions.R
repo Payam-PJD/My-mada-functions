@@ -1036,7 +1036,14 @@ multiple.LRmats <- function(dat,
          pch = var_pch, col = var_col, 
          pt.cex = var_pt.cex, cex = 0.7, bty = "o", box.lwd = 1, box.col = "black", y.intersp = 1.2)
   par(mar = c(5, 4, 4, 2) + 0.1, xpd = FALSE)
-  return(list(reitsmas, pLRs, nLRs, summaries, datasets))
+  returned.obj <- list()
+  returned.obj$reitsmas <- reitsmas
+  returned.obj$pLRs <- pLRs
+  returned.obj$nLRs <- nLRs
+  returned.obj$summaries <- summaries
+  returned.obj$datasets <- datasets
+  return(returned.obj)
+  # return(list(reitsmas, pLRs, nLRs, summaries, datasets))
 }
 
 
