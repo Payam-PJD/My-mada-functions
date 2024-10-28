@@ -212,6 +212,31 @@ forest.diag <- function(dat,
            just = "center"
     )
   }
+    # Calculate sensitivity estimates and confidence intervals
+  sens_estimate <- 100 * combined.set$metaprop.sens$TE.random
+  sens_lower <- 100 * combined.set$metaprop.sens$lower.random
+  sens_upper <- 100 * combined.set$metaprop.sens$upper.random
+  
+  # Format to 2 decimal places
+  sens_estimate_formatted <- sprintf("%.2f", sens_estimate)
+  sens_lower_formatted <- sprintf("%.2f", sens_lower)
+  sens_upper_formatted <- sprintf("%.2f", sens_upper)
+  
+  # Print sensitivity
+  cat("Sensitivity:", sens_estimate_formatted, "% (95% CI:", sens_lower_formatted, "-", sens_upper_formatted, "%)\n")
+  
+  # Calculate specificity estimates and confidence intervals
+  spec_estimate <- 100 * combined.set$metaprop.spec$TE.random
+  spec_lower <- 100 * combined.set$metaprop.spec$lower.random
+  spec_upper <- 100 * combined.set$metaprop.spec$upper.random
+  
+  # Format to 2 decimal places
+  spec_estimate_formatted <- sprintf("%.2f", spec_estimate)
+  spec_lower_formatted <- sprintf("%.2f", spec_lower)
+  spec_upper_formatted <- sprintf("%.2f", spec_upper)
+  
+  # Print specificity
+  cat("Specificity:", spec_estimate_formatted, "% (95% CI:", spec_lower_formatted, "-", spec_upper_formatted, "%)\n")
   if (object.return){
     return(combined.set)
   }
@@ -414,7 +439,44 @@ forest.diag.subgroup <- function (dat, #dataframe with TP, TN, FP, and FN and a 
            overall = plot.overall
     )
   }
+
+
+
+  # Loop over subgroups
+for (sg in 1:length(subgroup.list)) {
+    subgroup_name <- subgroup.list[sg]
+    valid_name <- valid.subgroup.list[sg]
+    
+    # Extract sensitivity estimates and confidence intervals
+    sens_estimate <- 100 * props$sens$overall$TE.random.w[subgroup_name]
+    sens_lower <- 100 * props$sens$overall$lower.random.w[subgroup_name]
+    sens_upper <- 100 * props$sens$overall$upper.random.w[subgroup_name]
+    
+    # Format to 2 decimal places
+    sens_estimate_formatted <- sprintf("%.2f", sens_estimate)
+    sens_lower_formatted <- sprintf("%.2f", sens_lower)
+    sens_upper_formatted <- sprintf("%.2f", sens_upper)
+    
+    # Extract specificity estimates and confidence intervals
+    spec_estimate <- 100 * props$spec$overall$TE.random.w[subgroup_name]
+    spec_lower <- 100 * props$spec$overall$lower.random.w[subgroup_name]
+    spec_upper <- 100 * props$spec$overall$upper.random.w[subgroup_name]
+    
+    # Format to 2 decimal places
+    spec_estimate_formatted <- sprintf("%.2f", spec_estimate)
+    spec_lower_formatted <- sprintf("%.2f", spec_lower)
+    spec_upper_formatted <- sprintf("%.2f", spec_upper)
+    
+    # Print subgroup name
+    cat("\nSubgroup:", subgroup_name, "\n")
+    # Print sensitivity
+    cat("  Sensitivity:", sens_estimate_formatted, "% (95% CI:", sens_lower_formatted, "-", sens_upper_formatted, "%)\n")
+    # Print specificity
+    cat("  Specificity:", spec_estimate_formatted, "% (95% CI:", spec_lower_formatted, "-", spec_upper_formatted, "%)\n")
+}
   
+  print(summary(reitsmas$reitsma.reg.fit))
+          
   if (object.return){
     returned.object <- list()
     returned.object$reitsmas <- reitsmas
@@ -425,12 +487,6 @@ forest.diag.subgroup <- function (dat, #dataframe with TP, TN, FP, and FN and a 
     returned.object$subgroup.names <- subgroup.list
     return(returned.object)
   }
-  for (sg  in 1:length(subgroup.list)){
-    print(paste(subgroup.list[sg], het.string(reitsmas$subgroups[[valid.subgroup.list[sg]]]), sep = " : "))
-  }
-  summary(reitsmas$reitsma.reg.fit)
-  
-  
 }
 
 
@@ -438,13 +494,6 @@ AUC_boot_paralell <- function(TP, FP, FN, TN, B=2000, alpha=0.95)
   {
   N <- length(TP)
   p <- 2
-
-  
-  
-  
-  
-  
-  
   n1 <- TP + FN
   n2 <- TN + FP
   
@@ -668,6 +717,67 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
            , lwd =1.5
     )
   }
+
+  # Check if there are multiple subgroups
+if (length(subgroup.list) > 1) {
+    # Loop over each subgroup
+    for (sg in 1:length(subgroup.list)) {
+        subgroup_name <- subgroup.list[sg]
+        valid_name <- valid.subgroup.list[sg]
+        summary.sg <- summaries$subgroups[[valid_name]]
+        
+        # Extract AUC estimate
+        auc_estimate <- summary.sg$AUC$AUC
+        
+        if (AUC.CI) {
+            # Confidence intervals are stored in AUC_CIs
+            auc_ci <- AUC_CIs[[valid_name]]$CI
+            auc_lower <- auc_ci[1]
+            auc_upper <- auc_ci[2]
+            
+            # Format to 2 decimal places
+            auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
+            auc_lower_formatted <- sprintf("%.2f", auc_lower)
+            auc_upper_formatted <- sprintf("%.2f", auc_upper)
+            
+            # Print AUC with confidence intervals
+            cat("\nSubgroup:", subgroup_name, "\n")
+            cat("  AUC:", auc_estimate_formatted, "(95% CI:", auc_lower_formatted, "-", auc_upper_formatted, ")\n")
+        } else {
+            # Format AUC estimate to 2 decimal places
+            auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
+            
+            # Print AUC without confidence intervals
+            cat("\nSubgroup:", subgroup_name, "\n")
+            cat("  AUC:", auc_estimate_formatted, "\n")
+        }
+    }
+} else {
+    # Only one subgroup or overall data
+    summary.overall <- summaries$subgroups[[valid.subgroup.list[1]]]
+    auc_estimate <- summary.overall$AUC$AUC
+    
+    if (AUC.CI) {
+        # Confidence intervals are stored in AUC_CIs
+        auc_ci <- AUC_CIs[[valid.subgroup.list[1]]]$CI
+        auc_lower <- auc_ci[1]
+        auc_upper <- auc_ci[2]
+        
+        # Format to 2 decimal places
+        auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
+        auc_lower_formatted <- sprintf("%.2f", auc_lower)
+        auc_upper_formatted <- sprintf("%.2f", auc_upper)
+        
+        # Print AUC with confidence intervals
+        cat("AUC:", auc_estimate_formatted, "(95% CI:", auc_lower_formatted, "-", auc_upper_formatted, ")\n")
+    } else {
+        # Format AUC estimate to 2 decimal places
+        auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
+        
+        # Print AUC without confidence intervals
+        cat("AUC:", auc_estimate_formatted, "\n")
+    }
+}       
   if (object.return){
     returned.object <- list()
     returned.object$reitsmas <- reitsmas
@@ -682,6 +792,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
   }
   for (sg  in 1:length(subgroup.list)){
     print(paste(subgroup.list[sg], het.string(reitsmas$subgroups[[valid.subgroup.list[sg]]]), sep = " : "))
+    
     if(plot.points){
       points(fpr(dat[which(dat[["subgrouping.variable"]] == subgroup.list[sg]), ]),
              sens(dat[which(dat[["subgrouping.variable"]] == subgroup.list[sg]), ]),
@@ -690,13 +801,6 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
              col = points.colors[sg]
       )
     }
-  }
-  
-  if(length(subgroup.list)>1){
-    anova(reitsmas$reitsma.reg.fit, reitsmas$reitsma.intercept)
-    summary(reitsmas$reitsma.reg.fit)
-  }else{
-    summary(reitsmas$reitsma.overall)
   }
 }
 
