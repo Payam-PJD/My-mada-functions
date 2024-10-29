@@ -804,9 +804,9 @@ if (length(subgroup.list) > 1) {
   }
 }
 
-dta.outliers.single <- function(dat,
-                                object.return = F){
-  dat <- dat[which(!is.na(dat[["TP"]]) & !is.na(dat[["TN"]]) & !is.na(dat[["FP"]]) & !is.na(dat[["FN"]])), ]
+dta.outliers <- function(dat, object.return = FALSE) {
+  dat <- dat[which(!is.na(dat[["TP"]]) & !is.na(dat[["TN"]]) & 
+                   !is.na(dat[["FP"]]) & !is.na(dat[["FN"]])), ]
   madauni.dat <- madauni(x = dat, type = "DOR", method = "DSL")
   metafor.object <- rma(yi = ln(madauni.dat$descr$DOR$DOR),
                         sei = madauni.dat$descr$DOR$se.lnDOR,
@@ -814,38 +814,82 @@ dta.outliers.single <- function(dat,
                         method = "DL")
   inf.object <- influence(metafor.object)
   plot(inf.object)
-  for (std in 1:length( dat[["TP"]])){
-    if (abs(inf.object$inf$rstudent[std]) > 2){
-      print(paste("Model No. ", 
-                  dat[["Model No."]][std],
-                  '.   ',
-                  dat[["names"]][std],
-                  " is outlier",
-                  sep = ""))
+  
+  outlier_indices <- which(abs(inf.object$inf$rstudent) > 2)
+  
+  for (std in outlier_indices) {
+    print(paste("Model No. ", 
+                dat[["Model No."]][std],
+                '.   ',
+                dat[["names"]][std],
+                " is outlier",
+                sep = ""))
+  }
+  
+  if (object.return) {
+    returned.object <- list()
+    returned.object$madauni <- madauni.dat
+    returned.object$inf <- inf.object
+    returned.object$outlier_indices <- outlier_indices
+    return(returned.object)
+  }
+}
+
+forest.diag.no <- function(dat, ...) {
+  # Capture additional arguments
+  args_list <- list(...)
+  
+  # First, run dta.outliers and capture the result
+  outliers_result <- dta.outliers(dat, object.return = TRUE)
+  
+  # The dta.outliers function already prints outlier information
+  # Now, extract the indices of outlier studies
+  outlier_indices <- outliers_result$outlier_indices
+  
+  # Remove outlier studies from the dataframe
+  if (length(outlier_indices) > 0) {
+    dat_no_outliers <- dat[-outlier_indices, ]
+  } else {
+    dat_no_outliers <- dat
+  }
+  
+  # Adjust any data-dependent arguments to match the modified dataframe
+  adjust_args <- function(arg_value) {
+    if (is.vector(arg_value) && length(arg_value) == nrow(dat)) {
+      return(arg_value[-outlier_indices])
+    } else {
+      return(arg_value)
     }
   }
-  returned.object <- list()
-  returned.object$madauni <- madauni.dat
-  returned.object$inf <- inf.object
   
+  # Apply the adjustment to all arguments
+  args_list <- lapply(args_list, adjust_args)
   
+  # Now, run forest.diag with the modified dataframe and adjusted arguments
+  do.call(forest.diag, c(list(dat = dat_no_outliers), args_list))
 }
+
+         
 
 dta.outliers.multi <- function(dat,
                                subgrouping.variable,
-                               object.return = F){
+                               object.return = FALSE) {
   dat[["subgrouping.variable"]] <- subgrouping.variable
-  dat <- dat[which(!is.na(dat[["TP"]]) & !is.na(dat[["TN"]]) & !is.na(dat[["FP"]]) & !is.na(dat[["FN"]])), ]
+  dat <- dat[which(!is.na(dat[["TP"]]) & !is.na(dat[["TN"]]) & 
+                   !is.na(dat[["FP"]]) & !is.na(dat[["FN"]])), ]
   subgroup.list <- unique(dat[["subgrouping.variable"]])
   counts <- table(dat[["subgrouping.variable"]])
   subgroup.list <- names(counts[counts >= 3])
   subgroup.list <- sort(subgroup.list)
-  valid.subgroup.list <- make.names(subgroup.list, unique = T)
+  valid.subgroup.list <- make.names(subgroup.list, unique = TRUE)
   dat <- subset(dat, dat[["subgrouping.variable"]] %in% subgroup.list)
+  
   metafors <- list()
   madaunis <- list()
   infs <- list()
-  for (sg in 1:length(subgroup.list)){
+  outlier_indices <- list()  # To store outlier indices
+  
+  for (sg in 1:length(subgroup.list)) {
     datsg <- dat[which(dat[["subgrouping.variable"]] == subgroup.list[sg]), ]
     madauni.sg <- madauni(datsg, type = "DOR", method = "DSL")
     metafor.object.sg <- rma(yi = ln(madauni.sg$descr$DOR$DOR),
@@ -857,37 +901,162 @@ dta.outliers.multi <- function(dat,
     metafors[[name.sg]] <- metafor.object.sg
     madaunis[[name.sg]] <- madauni.sg
     infs[[name.sg]] <- inf.object.sg
-    print(paste("*** In subgroup [",
-                subgroup.list[sg],
-                "] :",
-                sep = ""
-    )
-    )
-    number_of_outliers <- 0
-    for (std in 1:length(datsg$TP)){
-      if (abs(inf.object.sg$inf$rstudent[std]) > 2){
-        print(paste("Model No. ", 
-                    datsg[["Model No."]][std],
-                    '.   ',
-                    datsg[["names"]][std],
-                    " is outlier",
-                    sep = ""))
-        number_of_outliers <- number_of_outliers + 1
+    cat(paste0("*** In subgroup [", subgroup.list[sg], "] :\n"))
+    
+    # Identify outliers within the subgroup
+    sg_outlier_indices <- which(abs(inf.object.sg$inf$rstudent) > 2)
+    number_of_outliers <- length(sg_outlier_indices)
+    global_outlier_indices <- which(dat[["subgrouping.variable"]] == subgroup.list[sg])[sg_outlier_indices]
+    
+    if (number_of_outliers > 0) {
+      for (std in sg_outlier_indices) {
+        cat(paste("Model No. ", 
+                  datsg[["Model No."]][std],
+                  '.   ',
+                  datsg[["names"]][std],
+                  " is outlier",
+                  sep = ""), "\n")
       }
     }
-    print(paste("Number of Outliers within subgroup:",
-                number_of_outliers))
+    cat(paste("Number of Outliers within subgroup:", number_of_outliers, "\n"))
+    
+    # Store the global indices of outliers
+    outlier_indices[[name.sg]] <- global_outlier_indices
   }
-  returned.object <- list()
-  returned.object$metafors <- metafors
-  returned.object$madaunis <- madaunis
-  returned.object$infs <- infs
-  if (object.return){
+  
+  if (object.return) {
+    returned.object <- list()
+    returned.object$metafors <- metafors
+    returned.object$madaunis <- madaunis
+    returned.object$infs <- infs
+    returned.object$outlier_indices <- outlier_indices
     return(returned.object)
   }
 }
 
+forest.diag.subgroup.no <- function(dat, 
+                                    subgrouping.variable, 
+                                    ..., 
+                                    only.subgroups.bigger.than.3 = TRUE) {
+  # Capture additional arguments
+  args_list <- list(...)
+  
+  # Run dta.outliers.multi and capture the result
+  outliers_result <- dta.outliers.multi(dat, 
+                                        subgrouping.variable = subgrouping.variable, 
+                                        object.return = TRUE)
+  
+  # The dta.outliers.multi function already prints outlier information
+  # Extract all outlier indices across subgroups
+  outlier_indices <- unlist(outliers_result$outlier_indices)
+  
+  # Remove outlier studies from the dataframe
+  if (length(outlier_indices) > 0) {
+    dat_no_outliers <- dat[-outlier_indices, ]
+    subgrouping.variable_no_outliers <- subgrouping.variable[-outlier_indices]
+  } else {
+    dat_no_outliers <- dat
+    subgrouping.variable_no_outliers <- subgrouping.variable
+  }
+  
+  # Adjust any data-dependent arguments to match the modified dataframe
+  adjust_args <- function(arg_value) {
+    if (is.vector(arg_value) && length(arg_value) == nrow(dat)) {
+      return(arg_value[-outlier_indices])
+    } else if (is.list(arg_value) && length(arg_value) == nrow(dat)) {
+      return(arg_value[-outlier_indices])
+    } else {
+      return(arg_value)
+    }
+  }
+  
+  # Apply the adjustment to all arguments except subgrouping.variable
+  args_list <- lapply(args_list, adjust_args)
+  
+  # Now, run forest.diag.subgroup with the modified dataframe and adjusted arguments
+  do.call(forest.diag.subgroup, c(list(dat = dat_no_outliers, 
+                                       subgrouping.variable = subgrouping.variable_no_outliers, 
+                                       only.subgroups.bigger.than.3 = only.subgroups.bigger.than.3), 
+                                  args_list))
+}
 
+
+multiple.srocs.no <- function(dat, 
+                              subgrouping.variable = NULL, 
+                              ..., 
+                              object.return = TRUE,
+                              AUC.CI.object = NULL) {
+  # Capture additional arguments
+  args_list <- list(...)
+  
+  # Add default values for data-dependent arguments if not provided
+  if (is.null(args_list$sroc.colors)) {
+    args_list$sroc.colors <- c("blue", "maroon", "black", "skyblue", "#20cb20", "red")
+  }
+  if (is.null(args_list$points.colors)) {
+    args_list$points.colors <- c("#0000FF20", "#A52A2A20","#1d1c1c20" ,"#87ceeb30", "#20cb2020", "#ff000350")
+  }
+  if (is.null(args_list$pch.list)) {
+    args_list$pch.list <- c(16, 15, 17, 18, 15, 13)
+  }
+  if (is.null(args_list$summary.pch.list)) {
+    args_list$summary.pch.list <- c(16, 15, 17, 18, 15, 13)
+  }
+  
+  # Determine the number of subgroups
+  if (is.null(subgrouping.variable)) {
+    subgrouping.variable <- rep("Pooled", nrow(dat))
+  }
+  dat[["subgrouping.variable"]] <- subgrouping.variable
+  subgroup.list <- unique(subgrouping.variable)
+  
+  # Run appropriate outlier detection function
+  if (length(subgroup.list) <= 1) {
+    # Only one subgroup, use dta.outliers
+    outliers_result <- dta.outliers(dat, object.return = TRUE)
+    outlier_indices <- outliers_result$outlier_indices
+  } else {
+    # Multiple subgroups, use dta.outliers.multi
+    outliers_result <- dta.outliers.multi(dat, 
+                                          subgrouping.variable = subgrouping.variable, 
+                                          object.return = TRUE)
+    # Collect all outlier indices across subgroups
+    outlier_indices <- unlist(outliers_result$outlier_indices)
+  }
+  
+  # Remove outlier studies from the dataframe
+  if (length(outlier_indices) > 0) {
+    dat_no_outliers <- dat[-outlier_indices, ]
+    subgrouping.variable_no_outliers <- subgrouping.variable[-outlier_indices]
+  } else {
+    dat_no_outliers <- dat
+    subgrouping.variable_no_outliers <- subgrouping.variable
+  }
+  
+  # Adjust any data-dependent arguments to match the modified dataframe
+  adjust_args <- function(arg_value) {
+    if (is.vector(arg_value) && length(arg_value) == nrow(dat)) {
+      return(arg_value[-outlier_indices])
+    } else if (is.list(arg_value) && length(arg_value) == nrow(dat)) {
+      return(arg_value[-outlier_indices])
+    } else {
+      return(arg_value)
+    }
+  }
+  
+  # Apply the adjustment to all arguments except subgrouping.variable
+  args_list <- lapply(args_list, adjust_args)
+  
+  # Now, run multiple.srocs with the modified dataframe and adjusted arguments
+  do.call(multiple.srocs, c(list(dat = dat_no_outliers, 
+                                 subgrouping.variable = subgrouping.variable_no_outliers, 
+                                 object.return = object.return, 
+                                 AUC.CI.object = AUC.CI.object), 
+                            args_list))
+}
+
+
+         
 PBS3 <- function(y,S,b0,V0){
   
   N <- dim(y)[1]
