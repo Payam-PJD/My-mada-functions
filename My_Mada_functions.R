@@ -12,7 +12,11 @@ library(dplyr)
 library(yarrr)
 library(ggplot2)
 library(patchwork)
-
+library(grid)
+library(gridExtra)
+library(gtable)
+library(gridGraphics)
+library(ggplotify) 
 
 
 
@@ -242,6 +246,198 @@ forest.diag <- function(dat,
   }
   }
 
+
+forest.diag.combined <- function(dat,
+                                 lcols1 = NULL,
+                                 llab1 = NULL,
+                                 lcols2 = NULL,
+                                 llab2 = NULL,
+                                 object.return = FALSE,
+                                 plot.het = TRUE,
+                                 calcwidth.addline.opt = TRUE,
+                                 xlim = c(50, 100),
+                                 leftspace = "    ",
+                                 rightspace = "        ",
+                                 ratio = c(.7,.3),
+                                 ...
+                                 ) {
+  # Prepare data
+  dat[["lcols1"]] <- lcols1
+  dat[["lcols2"]] <- lcols2
+  dat <- dat[complete.cases(dat[, c("TP", "TN", "FP", "FN")]), ]
+  
+  # Fit Reitsma model
+  reitsma.fit <- reitsma(dat, method = 'ml')
+  summary.reitsma <- summary(reitsma.fit)
+  
+  # Meta-analysis for sensitivity
+  metaprop.sens <- metaprop(
+    data = dat,
+    studlab = dat[["names"]],
+    event = dat[["TP"]],
+    n = dat[["TP"]] + dat[["FN"]],
+    method.tau = "ML",
+    sm = "PRAW",
+    outclab = "Sensitivity",
+    method.ci = "WS",
+    common = FALSE
+  )
+  
+  # Meta-analysis for specificity
+  metaprop.spec <- metaprop(
+    data = dat,
+    studlab = dat[["names"]],
+    event = dat[["TN"]],
+    n = dat[["TN"]] + dat[["FP"]],
+    method.tau = "ML",
+    sm = "PRAW",
+    outclab = "Specificity",
+    method.ci = "WS",
+    common = FALSE
+  )
+  
+  # Update metaprop objects with confidence intervals from mada
+  madad.dat <- madad(dat)
+  
+  # Sensitivity
+  metaprop.sens$upper <- madad.dat$sens$sens.ci[, 2]
+  metaprop.sens$lower <- madad.dat$sens$sens.ci[, 1]
+  metaprop.sens$TE.random <- summary.reitsma$coefficients["sensitivity", "Estimate"]
+  metaprop.sens$lower.random <- summary.reitsma$coefficients["sensitivity", "95%ci.lb"]
+  metaprop.sens$upper.random <- summary.reitsma$coefficients["sensitivity", "95%ci.ub"]
+  
+  # Specificity (using numeric indices as per your instructions)
+  metaprop.spec$upper <- madad.dat$spec$spec.ci[, 2]
+  metaprop.spec$lower <- madad.dat$spec$spec.ci[, 1]
+  metaprop.spec$TE.random <- 1 - summary.reitsma$coefficients[4, 1]
+  metaprop.spec$lower.random <- 1 - summary.reitsma$coefficients[4, 5]
+  metaprop.spec$upper.random <- 1 - summary.reitsma$coefficients[4, 6]
+  
+  # Prepare left column labels
+  if (is.null(lcols1)) {
+    lcols1.string <- NULL
+  } else {
+    lcols1.string <- "lcols1"
+  }
+  if (is.null(lcols2)) {
+    lcols2.string <- NULL
+  } else {
+    lcols2.string <- "lcols2"
+  }
+  
+  leftcols_sens <- c("studlab", lcols1.string, lcols2.string)
+  leftlabs_sens <- c("Study", llab1, llab2)
+  
+  # Remove NULL values from leftcols and leftlabs
+  leftcols_sens <- leftcols_sens[!sapply(leftcols_sens, is.null)]
+  leftlabs_sens <- leftlabs_sens[!sapply(leftlabs_sens, is.null)]
+  
+  # Generate the sensitivity forest plot and capture it as a grob
+  metaprop.sens$text.random <- "Bivariate model"
+  plot_sens <- function() {
+    meta::forest(
+      metaprop.sens,
+      xlim = xlim,
+      pscale = 100,
+      just.addcols.right = "center",
+      rightcols = c("effect", "ci"),
+      rightlabs = c("Sensitivity %", "95% C.I."),
+      leftcols = leftcols_sens,
+      leftlabs = leftlabs_sens,
+      xlab = "Sensitivity",
+      smlab = "",
+      weight.study = "random",
+      squaresize = 0.7,
+      col.square = "navy",
+      col.square.lines = "navy",
+      col.diamond = "maroon",
+      col.diamond.lines = "maroon",
+      pooled.totals = FALSE,
+      comb.fixed = FALSE,
+      fs.hetstat = 10,
+      print.tau2 = FALSE,
+      print.Q = FALSE,
+      print.pval.Q = FALSE,
+      print.I2 = FALSE,
+      digits = 1,
+      hetstat = FALSE,
+      text.addline1 = if (plot.het) het.string(reitsma.fit) else " ",
+      ref = 100 * metaprop.sens$TE.random,
+      calcwidth.addline = calcwidth.addline.opt,
+      just = "center"
+    )
+  }
+  grob.sens <- ggplotify::as.grob(plot_sens)
+  
+  # Generate the specificity forest plot and capture it as a grob
+  
+  metaprop.spec$leftspace <- rep(leftspace, length(metaprop.spec$studlab))
+  metaprop.spec$rightspace <- rep(rightspace, length(metaprop.spec$studlab))
+  metaprop.spec$text.random <- "        "
+  plot_spec <- function() {
+    meta::forest(
+      metaprop.spec,
+      xlim = xlim,
+      pscale = 100,
+      just.addcols.right = "center",
+      rightcols = c("effect", "ci", "rightspace"),
+      rightlabs = c("Specificity %", "95% C.I.", "  "),
+      leftcols = "leftspace", # Exclude left columns
+      leftlabs = NULL,
+      studlab = F,
+      xlab = "Specificity",
+      smlab = "",
+      weight.study = "random",
+      squaresize = 0.7,
+      col.square = "navy",
+      col.square.lines = "navy",
+      col.diamond = "maroon",
+      col.diamond.lines = "maroon",
+      pooled.totals = FALSE,
+      comb.fixed = FALSE,
+      fs.hetstat = 10,
+      print.tau2 = FALSE,
+      print.Q = FALSE,
+      print.pval.Q = FALSE,
+      print.I2 = FALSE,
+      digits = 1,
+      hetstat = FALSE,
+      text.addline1 =  " ",
+      ref = 100 * metaprop.spec$TE.random,
+      calcwidth.addline = calcwidth.addline.opt,
+      just = "center"
+    )
+  }
+  grob.spec <- ggplotify::as.grob(plot_spec)
+  
+  # Adjust grob.spec to remove left padding
+  grob.spec$widths[1] <- unit(0, "cm")
+  # Combine the two grobs
+  combined <- grid.arrange(grob.sens, grob.spec, ncol = 2, widths = ratio)
+  
+  # Print overall estimates
+  sens_estimate <- 100 * metaprop.sens$TE.random
+  sens_lower <- 100 * metaprop.sens$lower.random
+  sens_upper <- 100 * metaprop.sens$upper.random
+  
+  spec_estimate <- 100 * metaprop.spec$TE.random
+  spec_lower <- 100 * metaprop.spec$lower.random
+  spec_upper <- 100 * metaprop.spec$upper.random
+  
+  cat("Sensitivity:", sprintf("%.2f", sens_estimate), "% (95% CI:", sprintf("%.2f", sens_lower), "-", sprintf("%.2f", sens_upper), "%)\n")
+  cat("Specificity:", sprintf("%.2f", spec_estimate), "% (95% CI:", sprintf("%.2f", spec_lower), "-", sprintf("%.2f", spec_upper), "%)\n")
+  
+  # Return objects if requested
+  if (object.return) {
+    combined.set <- list(
+      reitsma = reitsma.fit,
+      summary.reitsma = summary.reitsma,
+      metaprop.sens = metaprop.sens,
+      metaprop.spec = metaprop.spec
+    )
+    return(combined.set)
+  }
+}
 
 
 
@@ -488,6 +684,312 @@ for (sg in 1:length(subgroup.list)) {
     return(returned.object)
   }
 }
+
+
+
+
+forest.diag.subgroup.combined <- function(dat,                # Dataframe with TP, TN, FP, FN, and a variable named "names"
+                                          subgrouping.variable, # dat$subgrouping.variable
+                                          sortvar = NULL,
+                                          sglabel = "Subgroup", # String for subgroup label
+                                          lcols1 = NULL,        # Variable to be shown in left side dat$lcols1
+                                          llab1 = NULL,         # Label for lcols1
+                                          lcols2 = NULL,        # Variable to be shown in left side dat$lcols2
+                                          llab2 = NULL,         # Label for lcols2
+                                          object.return = TRUE, # If TRUE, returns an object used in the function
+                                          plot.het.overall = TRUE,
+                                          plot.het.subgroup = TRUE,
+                                          plot.overall = TRUE,
+                                          calcwidth.shet.opt = FALSE,
+                                          forest.xlim = c(50, 100),
+                                          leftspace = "    ",
+                                          rightspace = "        ",
+                                          ratio = c(0.7, 0.3),
+                                          ...) {
+# Prepare data
+  dat[["subgrouping.variable"]] <- subgrouping.variable
+  dat[["lcols1"]] <- lcols1
+  dat[["lcols2"]] <- lcols2
+  if (is.null(sortvar)) {
+    dat <- dat[order(dat[["subgrouping.variable"]]), ]
+  } else {
+    dat <- dat[order(dat[["subgrouping.variable"]], sortvar), ]
+  }
+  dat <- dat[complete.cases(dat[, c("TP", "TN", "FP", "FN")]), ]
+  
+  # Get list of subgroups
+  subgroup.list <- unique(dat[["subgrouping.variable"]])
+  counts <- table(dat[["subgrouping.variable"]])
+  # Exclude subgroups with less than 3 studies
+  subgroup.list <- names(counts[counts >= 3])
+  subgroup.list <- sort(subgroup.list)
+  valid.subgroup.list <- make.names(subgroup.list, unique = TRUE)
+  dat <- subset(dat, dat[["subgrouping.variable"]] %in% subgroup.list)
+  
+  # Initialize lists to store results
+  reitsmas <- list()
+  reitsmas$subgroups <- list()
+  summaries <- list()
+  summaries$subgroups <- list()
+  madads <- list()
+  madads$subgroups <- list()
+  props <- list()
+  props$sens <- list()
+  props$spec <- list()
+  
+  # Overall Reitsma model
+  reitsmas$reitsma.overall <- reitsma(data = dat, method = "ml")
+  summaries$reitsma.overall <- summary(reitsmas$reitsma.overall)
+  madads$overall <- madad(dat)
+  
+  # Meta-analysis for sensitivity and specificity (overall)
+  props$sens$overall <- metaprop(
+    data = dat,
+    studlab = dat[["names"]],
+    event = dat[["TP"]],
+    n = dat[["TP"]] + dat[["FN"]],
+    method.tau = "ML",
+    sm = "PRAW",
+    outclab = "Sensitivity",
+    method.ci = "WS",
+    common = FALSE,
+    subgroup = dat[["subgrouping.variable"]],
+    subgroup.name = sglabel
+  )
+
+  props$spec$overall <- metaprop(
+    data = dat,
+    studlab = dat[["names"]],
+    event = dat[["TN"]],
+    n = dat[["TN"]] + dat[["FP"]],
+    method.tau = "ML",
+    sm = "PRAW",
+    outclab = "Specificity",
+    method.ci = "WS",
+    common = FALSE,
+    subgroup = dat[["subgrouping.variable"]],
+    subgroup.name = sglabel
+  )
+  
+  # Update confidence intervals from mada
+  props$sens$overall$upper <- madads$overall$sens$sens.ci[, 2]
+  props$sens$overall$lower <- madads$overall$sens$sens.ci[, 1]
+  props$sens$overall$TE.random <- summaries$reitsma.overall$coefficients[3, 1]
+  props$sens$overall$lower.random <- summaries$reitsma.overall$coefficients[3, 5]
+  props$sens$overall$upper.random <- summaries$reitsma.overall$coefficients[3, 6]
+
+  props$spec$overall$upper <- madads$overall$spec$spec.ci[, 2]
+  props$spec$overall$lower <- madads$overall$spec$spec.ci[, 1]
+  props$spec$overall$TE.random <- 1 - summaries$reitsma.overall$coefficients[4, 1]
+  props$spec$overall$lower.random <- 1 - summaries$reitsma.overall$coefficients[4, 6]
+  props$spec$overall$upper.random <- 1 - summaries$reitsma.overall$coefficients[4, 5]
+
+  
+  hets.list <- list()
+  
+  # Loop over subgroups
+  for (sg in seq_along(subgroup.list)) {
+    subgroup_name <- subgroup.list[sg]
+    valid_name <- valid.subgroup.list[sg]
+    subgroup_data <- dat[dat[["subgrouping.variable"]] == subgroup_name, ]
+    
+    # Reitsma model for subgroup
+    reitsma.sg <- reitsma(data = subgroup_data, method = 'ml')
+    reitsmas$subgroups[[valid_name]] <- reitsma.sg
+    summaries$subgroups[[valid_name]] <- summary(reitsma.sg)
+    madads$subgroups[[valid_name]] <- madad(subgroup_data)
+    
+    # Sensitivity estimates for subgroup
+    props$sens$overall$TE.random.w[[subgroup_name]] <- summaries$subgroups[[valid_name]]$coefficients[3, 1]
+    props$sens$overall$lower.random.w[[subgroup_name]] <- summaries$subgroups[[valid_name]]$coefficients[3, 5]
+    props$sens$overall$upper.random.w[[subgroup_name]] <- summaries$subgroups[[valid_name]]$coefficients[3, 6]
+    
+    # Specificity estimates for subgroup
+    props$spec$overall$TE.random.w[[subgroup_name]] <- 1 - summaries$subgroups[[valid_name]]$coefficients[4, 1]
+    props$spec$overall$lower.random.w[[subgroup_name]] <- 1 - summaries$subgroups[[valid_name]]$coefficients[4, 6]
+    props$spec$overall$upper.random.w[[subgroup_name]] <- 1 - summaries$subgroups[[valid_name]]$coefficients[4, 5]
+    
+    if (plot.het.subgroup) {
+      hets.list[[subgroup_name]] <- het.string(reitsma.sg)
+    }
+  }
+
+  # Prepare left column labels
+  if (is.null(lcols1)) {
+    lcols1.string <- NULL
+  } else {
+    lcols1.string <- "lcols1"
+  }
+  if (is.null(lcols2)) {
+    lcols2.string <- NULL
+  } else {
+    lcols2.string <- "lcols2"
+  }
+  
+  leftcols <- c("studlab", lcols1.string, lcols2.string)
+  leftlabs <- c("Study", llab1, llab2)
+  
+  # Remove NULL values from leftcols and leftlabs
+  leftcols <- leftcols[!sapply(leftcols, is.null)]
+  leftlabs <- leftlabs[!sapply(leftlabs, is.null)]
+  
+  # Create dummy variables for spacing
+  props$spec$overall$leftspace <- rep(leftspace, length(props$spec$overall$studlab))
+  props$spec$overall$rightspace <- rep(rightspace, length(props$spec$overall$studlab))
+  
+  # Generate the sensitivity forest plot and capture it as a grob
+  plot_sens <- function() {
+    meta::forest(
+      props$sens$overall,
+      xlim = forest.xlim,
+      pscale = 100,
+      just.addcols.right = "center",
+      rightcols = c("effect", "ci"),
+      rightlabs = c("Sensitivity %", "95% C.I."),
+      leftcols = leftcols,
+      leftlabs = leftlabs,
+      xlab = "Sensitivity",
+      smlab = "",
+      weight.study = "random",
+      squaresize = 0.7,
+      col.square = "navy",
+      col.square.lines = "navy",
+      col.diamond = "maroon",
+      col.diamond.lines = "maroon",
+      pooled.totals = FALSE,
+      comb.fixed = FALSE,
+      fs.hetstat = 10,
+      print.tau2 = FALSE,
+      print.Q = FALSE,
+      print.pval.Q = FALSE,
+      print.I2 = FALSE,
+      digits = 1,
+      subgroup.hetstat = FALSE,
+      hetstat = FALSE,
+      test.subgroup = FALSE,
+      text.random.w = if (plot.het.subgroup) hets.list else "Subgroup pooled effect",
+      text.random = if (plot.overall) "Random effects bivariate model" else "",
+      ref = if (plot.overall) 100 * props$sens$overall$TE.random else NA,
+      calcwidth.random = calcwidth.shet.opt,
+      just = "center",
+      overall = plot.overall
+    )
+  }
+  grob.sens <- ggplotify::as.grob(plot_sens)
+  
+  # Generate the specificity forest plot and capture it as a grob
+  props$spec$overall$subgroup.name <- ""
+  props$spec$overall$subgroup.levels <- strrep(" ", seq_along(props$spec$overall$subgroup.levels))
+  plot_spec <- function() {
+    meta::forest(
+      props$spec$overall,
+      xlim = forest.xlim,
+      pscale = 100,
+      just.addcols.right = "center",
+      rightcols = c("effect", "ci", "rightspace"),
+      rightlabs = c("Specificity %", "95% C.I.", " "),
+      leftcols = c("leftspace"),  # Use dummy variable for spacing
+      leftlabs = c(" "),
+      studlab = FALSE,
+      xlab = "Specificity",
+      smlab = "",
+      weight.study = "random",
+      squaresize = 0.7,
+      col.square = "navy",
+      col.square.lines = "navy",
+      col.diamond = "maroon",
+      col.diamond.lines = "maroon",
+      pooled.totals = FALSE,
+      comb.fixed = FALSE,
+      fs.hetstat = 10,
+      print.tau2 = FALSE,
+      print.Q = FALSE,
+      print.pval.Q = FALSE,
+      print.I2 = FALSE,
+      digits = 1,
+      subgroup.hetstat = FALSE,
+      hetstat = FALSE,
+      test.subgroup = FALSE,
+      text.random.w = "",
+      text.random = "",
+      ref = if (plot.overall) 100 * props$spec$overall$TE.random else NA,
+      calcwidth.random = calcwidth.shet.opt,
+      just = "center",
+      overall = plot.overall
+    )
+  }
+  grob.spec <- ggplotify::as.grob(plot_spec)
+  
+  # Adjust grob.spec to remove left padding
+  grob.spec$widths[1] <- unit(0, "cm")
+  
+  # Combine the two grobs
+  combined <- grid.arrange(grob.sens, grob.spec, ncol = 2, widths = ratio)
+  
+  # Print overall estimates
+  sens_estimate <- 100 * props$sens$overall$TE.random
+  sens_lower <- 100 * props$sens$overall$lower.random
+  sens_upper <- 100 * props$sens$overall$upper.random
+  
+  spec_estimate <- 100 * props$spec$overall$TE.random
+  spec_lower <- 100 * props$spec$overall$lower.random
+  spec_upper <- 100 * props$spec$overall$upper.random
+  
+  cat("Overall Sensitivity:", sprintf("%.2f", sens_estimate), "% (95% CI:", sprintf("%.2f", sens_lower), "-", sprintf("%.2f", sens_upper), "%)\n")
+  cat("Overall Specificity:", sprintf("%.2f", spec_estimate), "% (95% CI:", sprintf("%.2f", spec_lower), "-", sprintf("%.2f", spec_upper), "%)\n")
+  
+  # Loop over subgroups to print estimates
+  for (sg in seq_along(subgroup.list)) {
+    subgroup_name <- subgroup.list[sg]
+    valid_name <- valid.subgroup.list[sg]
+    
+    # Extract sensitivity estimates and confidence intervals
+    sens_estimate <- 100 * props$sens$overall$TE.random.w[[subgroup_name]]
+    sens_lower <- 100 * props$sens$overall$lower.random.w[[subgroup_name]]
+    sens_upper <- 100 * props$sens$overall$upper.random.w[[subgroup_name]]
+    
+    # Format to 2 decimal places
+    sens_estimate_formatted <- sprintf("%.2f", sens_estimate)
+    sens_lower_formatted <- sprintf("%.2f", sens_lower)
+    sens_upper_formatted <- sprintf("%.2f", sens_upper)
+    
+    # Extract specificity estimates and confidence intervals
+    spec_estimate <- 100 * props$spec$overall$TE.random.w[[subgroup_name]]
+    spec_lower <- 100 * props$spec$overall$lower.random.w[[subgroup_name]]
+    spec_upper <- 100 * props$spec$overall$upper.random.w[[subgroup_name]]
+    
+    # Format to 2 decimal places
+    spec_estimate_formatted <- sprintf("%.2f", spec_estimate)
+    spec_lower_formatted <- sprintf("%.2f", spec_lower)
+    spec_upper_formatted <- sprintf("%.2f", spec_upper)
+    
+    # Print subgroup name
+    cat("\nSubgroup:", subgroup_name, "\n")
+    # Print sensitivity
+    cat("  Sensitivity:", sens_estimate_formatted, "% (95% CI:", sens_lower_formatted, "-", sens_upper_formatted, "%)\n")
+    # Print specificity
+    cat("  Specificity:", spec_estimate_formatted, "% (95% CI:", spec_lower_formatted, "-", spec_upper_formatted, "%)\n")
+  }
+  
+  # Print summary of the Reitsma regression
+  print(summary(reitsmas$reitsma.overall))
+  
+  # Return objects if requested
+  if (object.return) {
+    returned.object <- list()
+    returned.object$reitsmas <- reitsmas
+    returned.object$madads <- madads
+    returned.object$metaprops <- props
+    returned.object$summaries <- summaries
+    returned.object$valid.subgroup.names <- valid.subgroup.list
+    returned.object$subgroup.names <- subgroup.list
+    return(returned.object)
+  }
+}
+
+
+
+
 
 
 AUC_boot_paralell <- function(TP, FP, FN, TN, B=2000, alpha=0.95)
@@ -835,7 +1337,7 @@ dta.outliers <- function(dat, object.return = FALSE) {
   }
 }
 
-forest.diag.no <- function(dat, ...) {
+forest.diag.no <- function(dat, combined = T, ...) {
   # Capture additional arguments
   args_list <- list(...)
   
@@ -866,7 +1368,11 @@ forest.diag.no <- function(dat, ...) {
   args_list <- lapply(args_list, adjust_args)
   
   # Now, run forest.diag with the modified dataframe and adjusted arguments
+  if (combined){
+do.call(forest.diag.combined, c(list(dat = dat_no_outliers), args_list))
+    } else {
   do.call(forest.diag, c(list(dat = dat_no_outliers), args_list))
+    }
 }
 
          
@@ -935,7 +1441,8 @@ dta.outliers.multi <- function(dat,
 }
 
 forest.diag.subgroup.no <- function(dat, 
-                                    subgrouping.variable, 
+                                    subgrouping.variable,
+                                    combined = T,
                                     ..., 
                                     only.subgroups.bigger.than.3 = TRUE) {
   # Capture additional arguments
@@ -974,10 +1481,17 @@ forest.diag.subgroup.no <- function(dat,
   args_list <- lapply(args_list, adjust_args)
   
   # Now, run forest.diag.subgroup with the modified dataframe and adjusted arguments
+  if (combined) {
+  do.call(forest.diag.subgroup.combined, c(list(dat = dat_no_outliers, 
+                                       subgrouping.variable = subgrouping.variable_no_outliers, 
+                                       only.subgroups.bigger.than.3 = only.subgroups.bigger.than.3), 
+                                  args_list))
+    } else {
   do.call(forest.diag.subgroup, c(list(dat = dat_no_outliers, 
                                        subgrouping.variable = subgrouping.variable_no_outliers, 
                                        only.subgroups.bigger.than.3 = only.subgroups.bigger.than.3), 
                                   args_list))
+    }
 }
 
 
