@@ -739,6 +739,9 @@ forest.diag.subgroup.combined <- function(dat,                # Dataframe with T
   
   # Overall Reitsma model
   reitsmas$reitsma.overall <- reitsma(data = dat, method = "ml")
+  reitsmas$reitsma.reg.fit <- reitsma(data = dat, method = "ml", formula = cbind(tsens , tfpr) ~ dat[["subgrouping.variable"]])
+  reitsmas$reitsma.intercept <- reitsma(data = dat, method = "ml", formula = cbind(tsens , tfpr) ~ 1)
+  reitsmas$anova.reitsma <- anova(reitsmas$reitsma.reg.fit, reitsmas$reitsma.intercept)
   summaries$reitsma.overall <- summary(reitsmas$reitsma.overall)
   madads$overall <- madad(dat)
   
