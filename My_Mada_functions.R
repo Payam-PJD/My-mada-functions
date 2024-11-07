@@ -871,7 +871,7 @@ forest.diag.subgroup.combined <- function(dat,                # Dataframe with T
       hetstat = FALSE,
       test.subgroup = FALSE,
       text.random = if (plot.overall) "Random effects bivariate model" else "",
-      text.random.w = het.list,
+      text.random.w = hets.list,
       text.addline2 =  if (plot.overall) het.string(reitsmas$reitsma.overall) else " ",
       text.addline1 = paste("Between-group difference (p): ", round(reitsmas$anova.reitsma$statistic[3], digits = 3)),
       ref = if (plot.overall) 100 * props$sens$overall$TE.random else NA,
