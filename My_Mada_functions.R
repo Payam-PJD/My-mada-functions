@@ -923,7 +923,8 @@ forest.diag.subgroup.combined <- function(dat,                # Dataframe with T
       ref = if (plot.overall) 100 * props$spec$overall$TE.random else NA,
       calcwidth.random = calcwidth.shet.opt,
       just = "center",
-      overall = plot.overall
+      overall = plot.overall,
+      col.subgroup = "white"
     )
   }
   grob.spec <- ggplotify::as.grob(plot_spec)
