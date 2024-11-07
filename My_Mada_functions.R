@@ -870,7 +870,7 @@ forest.diag.subgroup.combined <- function(dat,                # Dataframe with T
       subgroup.hetstat = FALSE,
       hetstat = FALSE,
       test.subgroup = FALSE,
-      text.random = if (plot.overall) "Random effects bivariate model" else "",
+      text.random = if (plot.overall) "Bivariate model" else " ",
       text.random.w = hets.list,
       text.addline2 =  if (plot.overall) het.string(reitsmas$reitsma.overall) else " ",
       text.addline1 = paste("Between-group difference (p): ", round(reitsmas$anova.reitsma$statistic[3], digits = 3)),
@@ -883,8 +883,9 @@ forest.diag.subgroup.combined <- function(dat,                # Dataframe with T
   grob.sens <- ggplotify::as.grob(plot_sens)
   
   # Generate the specificity forest plot and capture it as a grob
-  props$spec$overall$subgroup.name <- ""
+  props$spec$overall$subgroup.name <- " "
   props$spec$overall$subgroup.levels <- strrep(" ", seq_along(props$spec$overall$subgroup.levels))
+  empty_list <- rep(" ", length(hets.list))
   plot_spec <- function() {
     meta::forest(
       props$spec$overall,
@@ -915,10 +916,10 @@ forest.diag.subgroup.combined <- function(dat,                # Dataframe with T
       subgroup.hetstat = FALSE,
       hetstat = FALSE,
       test.subgroup = FALSE,
-      text.random.w = "",
-      text.random = "",
+      text.random.w = empty_list,
+      text.random = " ",
       text.addline2 = " ",
-      text.addline1 = "",
+      text.addline1 = " ",
       ref = if (plot.overall) 100 * props$spec$overall$TE.random else NA,
       calcwidth.random = calcwidth.shet.opt,
       just = "center",
