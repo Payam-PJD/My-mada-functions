@@ -1386,6 +1386,7 @@ do.call(forest.diag.combined, c(list(dat = dat_no_outliers), args_list))
 
          
 
+# Modified dta.outliers.multi function (unchanged)
 dta.outliers.multi <- function(dat,
                                subgrouping.variable,
                                object.return = FALSE) {
@@ -1396,13 +1397,14 @@ dta.outliers.multi <- function(dat,
   counts <- table(dat[["subgrouping.variable"]])
   subgroup.list <- names(counts[counts >= 3])
   subgroup.list <- sort(subgroup.list)
-  valid.subgroup.list <- make.names(subgroup.list, unique = TRUE)
+  # Use original subgroup names for consistency
+  valid.subgroup.list <- subgroup.list
   dat <- subset(dat, dat[["subgrouping.variable"]] %in% subgroup.list)
   
   metafors <- list()
   madaunis <- list()
   infs <- list()
-  outlier_indices <- list()  # To store outlier indices
+  outlier_ids <- list()  # Store unique identifiers of outliers
   
   for (sg in 1:length(subgroup.list)) {
     datsg <- dat[which(dat[["subgrouping.variable"]] == subgroup.list[sg]), ]
@@ -1421,7 +1423,6 @@ dta.outliers.multi <- function(dat,
     # Identify outliers within the subgroup
     sg_outlier_indices <- which(abs(inf.object.sg$inf$rstudent) > 2)
     number_of_outliers <- length(sg_outlier_indices)
-    global_outlier_indices <- which(dat[["subgrouping.variable"]] == subgroup.list[sg])[sg_outlier_indices]
     
     if (number_of_outliers > 0) {
       for (std in sg_outlier_indices) {
@@ -1432,11 +1433,13 @@ dta.outliers.multi <- function(dat,
                   " is outlier",
                   sep = ""), "\n")
       }
+      # Store unique identifiers of outliers
+      sg_outlier_ids <- datsg[["Model No."]][sg_outlier_indices]
+      outlier_ids[[name.sg]] <- sg_outlier_ids
+    } else {
+      outlier_ids[[name.sg]] <- NULL
     }
     cat(paste("Number of Outliers within subgroup:", number_of_outliers, "\n"))
-    
-    # Store the global indices of outliers
-    outlier_indices[[name.sg]] <- global_outlier_indices
   }
   
   if (object.return) {
@@ -1444,16 +1447,23 @@ dta.outliers.multi <- function(dat,
     returned.object$metafors <- metafors
     returned.object$madaunis <- madaunis
     returned.object$infs <- infs
-    returned.object$outlier_indices <- outlier_indices
+    returned.object$outlier_ids <- outlier_ids
+    # Include subgroup names for reference
+    returned.object$subgroup.list <- subgroup.list
     return(returned.object)
   }
 }
 
+# Modified forest.diag.subgroup.no function
 forest.diag.subgroup.no <- function(dat, 
                                     subgrouping.variable,
-                                    combined = T,
+                                    combined = TRUE,
                                     ..., 
-                                    only.subgroups.bigger.than.3 = TRUE) {
+                                    only.subgroups.bigger.than.3 = TRUE,
+                                    exclude.outliers.in.subgroups = NULL) {
+  # Add subgrouping.variable to dat
+  dat[["subgrouping.variable"]] <- subgrouping.variable
+  
   # Capture additional arguments
   args_list <- list(...)
   
@@ -1462,53 +1472,86 @@ forest.diag.subgroup.no <- function(dat,
                                         subgrouping.variable = subgrouping.variable, 
                                         object.return = TRUE)
   
-  # The dta.outliers.multi function already prints outlier information
-  # Extract all outlier indices across subgroups
-  outlier_indices <- unlist(outliers_result$outlier_indices, use.names = F)
+  # Extract outlier identifiers and subgroup names
+  outlier_ids_list <- outliers_result$outlier_ids  # Named list with subgroup names
+  subgroup_names <- names(outlier_ids_list)
+  
+  # Determine which subgroups to exclude outliers from
+  if (is.null(exclude.outliers.in.subgroups)) {
+    # Exclude outliers from all subgroups (default behavior)
+    outlier_ids <- unlist(outlier_ids_list, use.names = FALSE)
+  } else {
+    # Exclude outliers only from specified subgroups
+    if (is.numeric(exclude.outliers.in.subgroups)) {
+      # Subgroup indices provided
+      subgroup_indices <- exclude.outliers.in.subgroups
+      # Validate indices
+      if (any(subgroup_indices < 1 | subgroup_indices > length(subgroup_names))) {
+        stop("exclude.outliers.in.subgroups contains invalid subgroup indices.")
+      }
+      subgroup_names_to_exclude <- subgroup_names[subgroup_indices]
+    } else if (is.character(exclude.outliers.in.subgroups)) {
+      # Subgroup names provided
+      subgroup_names_to_exclude <- exclude.outliers.in.subgroups
+      # Validate names
+      invalid_names <- setdiff(subgroup_names_to_exclude, subgroup_names)
+      if (length(invalid_names) > 0) {
+        stop(paste("The following subgroups are invalid:", paste(invalid_names, collapse = ", ")))
+      }
+    } else {
+      stop("exclude.outliers.in.subgroups must be numeric indices or character names.")
+    }
+    
+    # Subset outlier_ids_list to only include specified subgroups
+    outlier_ids_list_subset <- outlier_ids_list[subgroup_names %in% subgroup_names_to_exclude]
+    outlier_ids <- unlist(outlier_ids_list_subset, use.names = FALSE)
+  }
   
   # Remove outlier studies from the dataframe
-  if (length(outlier_indices) > 0) {
-    dat_no_outliers <- dat[-outlier_indices, ]
-    subgrouping.variable_no_outliers <- subgrouping.variable[-outlier_indices]
+  if (length(outlier_ids) > 0) {
+    dat_no_outliers <- dat[!dat[["Model No."]] %in% outlier_ids, ]
   } else {
     dat_no_outliers <- dat
-    subgrouping.variable_no_outliers <- subgrouping.variable
   }
+  
+  # Extract the adjusted subgrouping.variable
+  subgrouping.variable_no_outliers <- dat_no_outliers[["subgrouping.variable"]]
   
   # Adjust any data-dependent arguments to match the modified dataframe
   adjust_args <- function(arg_value) {
     if (is.vector(arg_value) && length(arg_value) == nrow(dat)) {
-      return(arg_value[-outlier_indices])
+      return(arg_value[!dat[["Model No."]] %in% outlier_ids])
     } else if (is.list(arg_value) && length(arg_value) == nrow(dat)) {
-      return(arg_value[-outlier_indices])
+      return(arg_value[!dat[["Model No."]] %in% outlier_ids])
     } else {
       return(arg_value)
     }
   }
   
-  # Apply the adjustment to all arguments except subgrouping.variable
+  # Apply the adjustment to all arguments
   args_list <- lapply(args_list, adjust_args)
   
   # Now, run forest.diag.subgroup with the modified dataframe and adjusted arguments
   if (combined) {
-  do.call(forest.diag.subgroup.combined, c(list(dat = dat_no_outliers, 
-                                       subgrouping.variable = subgrouping.variable_no_outliers, 
-                                       only.subgroups.bigger.than.3 = only.subgroups.bigger.than.3), 
-                                  args_list))
-    } else {
-  do.call(forest.diag.subgroup, c(list(dat = dat_no_outliers, 
-                                       subgrouping.variable = subgrouping.variable_no_outliers, 
-                                       only.subgroups.bigger.than.3 = only.subgroups.bigger.than.3), 
-                                  args_list))
-    }
+    do.call(forest.diag.subgroup.combined, c(list(dat = dat_no_outliers, 
+                                                  subgrouping.variable = subgrouping.variable_no_outliers, 
+                                                  only.subgroups.bigger.than.3 = only.subgroups.bigger.than.3), 
+                                             args_list))
+  } else {
+    do.call(forest.diag.subgroup, c(list(dat = dat_no_outliers, 
+                                         subgrouping.variable = subgrouping.variable_no_outliers, 
+                                         only.subgroups.bigger.than.3 = only.subgroups.bigger.than.3), 
+                                    args_list))
+  }
 }
 
-
+# Modified multiple.srocs.no function
 multiple.srocs.no <- function(dat, 
                               subgrouping.variable = NULL, 
                               ..., 
                               object.return = TRUE,
-                              AUC.CI.object = NULL) {
+                              AUC.CI.object = NULL,
+                              exclude.outliers.in.subgroups = NULL) {
   # Capture additional arguments
   args_list <- list(...)
   
@@ -1537,31 +1580,64 @@ multiple.srocs.no <- function(dat,
   if (length(subgroup.list) <= 1) {
     # Only one subgroup, use dta.outliers
     outliers_result <- dta.outliers(dat, object.return = TRUE)
-    outlier_indices <- outliers_result$outlier_indices
+    outlier_ids <- outliers_result$outlier_ids  # Use unique identifiers
   } else {
     # Multiple subgroups, use dta.outliers.multi
     outliers_result <- dta.outliers.multi(dat, 
                                           subgrouping.variable = subgrouping.variable, 
                                           object.return = TRUE)
-    # Collect all outlier indices across subgroups
-    outlier_indices <- unlist(outliers_result$outlier_indices, use.names = F)
+    # Extract outlier identifiers and subgroup names
+    outlier_ids_list <- outliers_result$outlier_ids  # Named list with subgroup names
+    subgroup_names <- names(outlier_ids_list)
+    
+    # Determine which subgroups to exclude outliers from
+    if (is.null(exclude.outliers.in.subgroups)) {
+      # Exclude outliers from all subgroups (default behavior)
+      outlier_ids <- unlist(outlier_ids_list, use.names = FALSE)
+    } else {
+      # Exclude outliers only from specified subgroups
+      if (is.numeric(exclude.outliers.in.subgroups)) {
+        # Subgroup indices provided
+        subgroup_indices <- exclude.outliers.in.subgroups
+        # Validate indices
+        if (any(subgroup_indices < 1 | subgroup_indices > length(subgroup_names))) {
+          stop("exclude.outliers.in.subgroups contains invalid subgroup indices.")
+        }
+        subgroup_names_to_exclude <- subgroup_names[subgroup_indices]
+      } else if (is.character(exclude.outliers.in.subgroups)) {
+        # Subgroup names provided
+        subgroup_names_to_exclude <- exclude.outliers.in.subgroups
+        # Validate names
+        invalid_names <- setdiff(subgroup_names_to_exclude, subgroup_names)
+        if (length(invalid_names) > 0) {
+          stop(paste("The following subgroups are invalid:", paste(invalid_names, collapse = ", ")))
+        }
+      } else {
+        stop("exclude.outliers.in.subgroups must be numeric indices or character names.")
+      }
+      
+      # Subset outlier_ids_list to only include specified subgroups
+      outlier_ids_list_subset <- outlier_ids_list[subgroup_names %in% subgroup_names_to_exclude]
+      outlier_ids <- unlist(outlier_ids_list_subset, use.names = FALSE)
+    }
   }
   
   # Remove outlier studies from the dataframe
-  if (length(outlier_indices) > 0) {
-    dat_no_outliers <- dat[-outlier_indices, ]
-    subgrouping.variable_no_outliers <- subgrouping.variable[-outlier_indices]
+  if (length(outlier_ids) > 0) {
+    dat_no_outliers <- dat[!dat[["Model No."]] %in% outlier_ids, ]
   } else {
     dat_no_outliers <- dat
-    subgrouping.variable_no_outliers <- subgrouping.variable
   }
+  
+  # Extract the adjusted subgrouping.variable
+  subgrouping.variable_no_outliers <- dat_no_outliers[["subgrouping.variable"]]
   
   # Adjust any data-dependent arguments to match the modified dataframe
   adjust_args <- function(arg_value) {
     if (is.vector(arg_value) && length(arg_value) == nrow(dat)) {
-      return(arg_value[-outlier_indices])
+      return(arg_value[!dat[["Model No."]] %in% outlier_ids])
     } else if (is.list(arg_value) && length(arg_value) == nrow(dat)) {
-      return(arg_value[-outlier_indices])
+      return(arg_value[!dat[["Model No."]] %in% outlier_ids])
     } else {
       return(arg_value)
     }
@@ -1577,7 +1653,6 @@ multiple.srocs.no <- function(dat,
                                  AUC.CI.object = AUC.CI.object), 
                             args_list))
 }
-
 
          
 PBS3 <- function(y,S,b0,V0){
