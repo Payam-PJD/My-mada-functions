@@ -1449,7 +1449,7 @@ dta.outliers.multi <- function(dat,
   }
 }
 
-forest.diag.subgroup.no <- function(dat_pre, 
+forest.diag.subgroup.no <- function(dat, 
                                     subgrouping.variable,
                                     combined = T,
                                     ..., 
@@ -1458,7 +1458,7 @@ forest.diag.subgroup.no <- function(dat_pre,
   args_list <- list(...)
   
   # Run dta.outliers.multi and capture the result
-  outliers_result <- dta.outliers.multi(dat_pre, 
+  outliers_result <- dta.outliers.multi(dat, 
                                         subgrouping.variable = subgrouping.variable, 
                                         object.return = TRUE)
   
@@ -1468,18 +1468,18 @@ forest.diag.subgroup.no <- function(dat_pre,
   
   # Remove outlier studies from the dataframe
   if (length(outlier_indices) > 0) {
-    dat_no_outliers <- dat_pre[-outlier_indices, ]
+    dat_no_outliers <- dat[-outlier_indices, ]
     subgrouping.variable_no_outliers <- subgrouping.variable[-outlier_indices]
   } else {
-    dat_no_outliers <- dat_pre
+    dat_no_outliers <- dat
     subgrouping.variable_no_outliers <- subgrouping.variable
   }
   
   # Adjust any data-dependent arguments to match the modified dataframe
   adjust_args <- function(arg_value) {
-    if (is.vector(arg_value) && length(arg_value) == nrow(dat_pre)) {
+    if (is.vector(arg_value) && length(arg_value) == nrow(dat)) {
       return(arg_value[-outlier_indices])
-    } else if (is.list(arg_value) && length(arg_value) == nrow(dat_pre)) {
+    } else if (is.list(arg_value) && length(arg_value) == nrow(dat)) {
       return(arg_value[-outlier_indices])
     } else {
       return(arg_value)
