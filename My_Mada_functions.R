@@ -1464,7 +1464,7 @@ forest.diag.subgroup.no <- function(dat,
   
   # The dta.outliers.multi function already prints outlier information
   # Extract all outlier indices across subgroups
-  outlier_indices <- unlist(outliers_result$outlier_indices)
+  outlier_indices <- unlist(outliers_result$outlier_indices, use.names = F)
   
   # Remove outlier studies from the dataframe
   if (length(outlier_indices) > 0) {
@@ -1544,7 +1544,7 @@ multiple.srocs.no <- function(dat,
                                           subgrouping.variable = subgrouping.variable, 
                                           object.return = TRUE)
     # Collect all outlier indices across subgroups
-    outlier_indices <- unlist(outliers_result$outlier_indices)
+    outlier_indices <- unlist(outliers_result$outlier_indices, use.names = F)
   }
   
   # Remove outlier studies from the dataframe
