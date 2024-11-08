@@ -18,6 +18,8 @@ library(gtable)
 library(gridGraphics)
 library(ggplotify) 
 
+#dataset should have unique identifier "Model No." and "Study No." It should have "names" and TP TN FP FN
+
 
 
 rename <- function(dat, option){
