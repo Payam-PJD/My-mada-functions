@@ -707,6 +707,7 @@ forest.diag.subgroup.combined <- function(dat,                # Dataframe with T
                                           leftspace = "    ",
                                           rightspace = "        ",
                                           ratio = c(0.7, 0.3),
+                                          only.subgroups.bigger.than.3 = T,
                                           ...) {
 # Prepare data
   dat[["subgrouping.variable"]] <- subgrouping.variable
@@ -722,8 +723,9 @@ forest.diag.subgroup.combined <- function(dat,                # Dataframe with T
   # Get list of subgroups
   subgroup.list <- unique(dat[["subgrouping.variable"]])
   counts <- table(dat[["subgrouping.variable"]])
-  # Exclude subgroups with less than 3 studies
+  if (only.subgroups.bigger.than.3) {
   subgroup.list <- names(counts[counts >= 3])
+    }
   subgroup.list <- sort(subgroup.list)
   valid.subgroup.list <- make.names(subgroup.list, unique = TRUE)
   dat <- subset(dat, dat[["subgrouping.variable"]] %in% subgroup.list)
