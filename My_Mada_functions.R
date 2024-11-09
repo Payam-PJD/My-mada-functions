@@ -20,7 +20,10 @@ library(ggplotify)
 
 #dataset should have unique identifier "Model No." and "Study No." It should have "names" and TP TN FP FN
 
-
+exclude_by_names <- function(dat, study_names){
+  dat_no <- dat[-which(dat$names %in% study_names), ]
+  return(dat_no)
+}
 
 rename <- function(dat, option){
   
