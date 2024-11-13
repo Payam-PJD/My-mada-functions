@@ -1393,13 +1393,12 @@ do.call(forest.diag.combined, c(list(dat = dat_no_outliers), args_list))
 
          
 
-# Modified dta.outliers.multi function (unchanged)
 dta.outliers.multi <- function(dat,
                                subgrouping.variable,
                                object.return = FALSE) {
   dat[["subgrouping.variable"]] <- subgrouping.variable
   dat <- dat[which(!is.na(dat[["TP"]]) & !is.na(dat[["TN"]]) & 
-                   !is.na(dat[["FP"]]) & !is.na(dat[["FN"]])), ]
+                     !is.na(dat[["FP"]]) & !is.na(dat[["FN"]])), ]
   subgroup.list <- unique(dat[["subgrouping.variable"]])
   counts <- table(dat[["subgrouping.variable"]])
   subgroup.list <- names(counts[counts >= 3])
@@ -1412,6 +1411,7 @@ dta.outliers.multi <- function(dat,
   madaunis <- list()
   infs <- list()
   outlier_ids <- list()  # Store unique identifiers of outliers
+  outlier_study_ids <- list()
   
   for (sg in 1:length(subgroup.list)) {
     datsg <- dat[which(dat[["subgrouping.variable"]] == subgroup.list[sg]), ]
@@ -1442,9 +1442,12 @@ dta.outliers.multi <- function(dat,
       }
       # Store unique identifiers of outliers
       sg_outlier_ids <- datsg[["Model No."]][sg_outlier_indices]
+      sg_outlier_study_ids <- datsg[["Study No."]][sg_outlier_indices]
       outlier_ids[[name.sg]] <- sg_outlier_ids
+      outlier_study_ids[[name.sg]] <- sg_outlier_study_ids
     } else {
       outlier_ids[[name.sg]] <- NULL
+      outlier_study_ids[[name.sg]] <- NULL
     }
     cat(paste("Number of Outliers within subgroup:", number_of_outliers, "\n"))
   }
@@ -1455,6 +1458,7 @@ dta.outliers.multi <- function(dat,
     returned.object$madaunis <- madaunis
     returned.object$infs <- infs
     returned.object$outlier_ids <- outlier_ids
+    returned.object$outlier_study_ids <- outlier_study_ids
     # Include subgroup names for reference
     returned.object$subgroup.list <- subgroup.list
     return(returned.object)
@@ -1467,7 +1471,8 @@ forest.diag.subgroup.no <- function(dat,
                                     combined = TRUE,
                                     ..., 
                                     only.subgroups.bigger.than.3 = TRUE,
-                                    exclude.outliers.in.subgroups = NULL) {
+                                    exclude.outliers.in.subgroups = NULL,
+                                    exclude_from_all_subgroups = FALSE) {
   # Add subgrouping.variable to dat
   dat[["subgrouping.variable"]] <- subgrouping.variable
   
@@ -1481,12 +1486,14 @@ forest.diag.subgroup.no <- function(dat,
   
   # Extract outlier identifiers and subgroup names
   outlier_ids_list <- outliers_result$outlier_ids  # Named list with subgroup names
+  outlier_study_ids_list <- outliers_result$outlier_study_ids
   subgroup_names <- names(outlier_ids_list)
   
   # Determine which subgroups to exclude outliers from
   if (is.null(exclude.outliers.in.subgroups)) {
     # Exclude outliers from all subgroups (default behavior)
     outlier_ids <- unlist(outlier_ids_list, use.names = FALSE)
+    outlier_study_ids <- unique(as.numeric(unlist(outlier_study_ids_list, use.names = FALSE)))
   } else {
     # Exclude outliers only from specified subgroups
     if (is.numeric(exclude.outliers.in.subgroups)) {
@@ -1511,13 +1518,18 @@ forest.diag.subgroup.no <- function(dat,
     
     # Subset outlier_ids_list to only include specified subgroups
     outlier_ids_list_subset <- outlier_ids_list[subgroup_names %in% subgroup_names_to_exclude]
+    outlier_study_ids_list_subset <- outlier_study_ids_list[subgroup_names %in% subgroup_names_to_exclude]
     outlier_ids <- unlist(outlier_ids_list_subset, use.names = FALSE)
+    outlier_study_ids <- unique(as.numeric(unlist(outlier_study_ids_list_subset, use.names = FALSE)))
   }
   
   # Remove outlier studies from the dataframe
   if (length(outlier_ids) > 0) {
+    if(exclude_from_all_subgroups){
+      outlier_ids <- as.vector(dat[dat[["Study No."]] %in% outlier_study_ids, ][["Model No."]])
+    }
     dat_no_outliers <- dat[!dat[["Model No."]] %in% outlier_ids, ]
-  } else {
+    } else {
     dat_no_outliers <- dat
   }
   
@@ -1552,13 +1564,21 @@ forest.diag.subgroup.no <- function(dat,
   }
 }
 
-# Modified multiple.srocs.no function
+
+
+
+
+
+
+
+
 multiple.srocs.no <- function(dat, 
                               subgrouping.variable = NULL, 
                               ..., 
                               object.return = TRUE,
                               AUC.CI.object = NULL,
-                              exclude.outliers.in.subgroups = NULL) {
+                              exclude.outliers.in.subgroups = NULL,
+                              exclude_from_all_subgroups = F) {
   # Capture additional arguments
   args_list <- list(...)
   
@@ -1593,14 +1613,17 @@ multiple.srocs.no <- function(dat,
     outliers_result <- dta.outliers.multi(dat, 
                                           subgrouping.variable = subgrouping.variable, 
                                           object.return = TRUE)
+    
     # Extract outlier identifiers and subgroup names
     outlier_ids_list <- outliers_result$outlier_ids  # Named list with subgroup names
+    outlier_study_ids_list <- outliers_result$outlier_study_ids
     subgroup_names <- names(outlier_ids_list)
     
     # Determine which subgroups to exclude outliers from
     if (is.null(exclude.outliers.in.subgroups)) {
       # Exclude outliers from all subgroups (default behavior)
       outlier_ids <- unlist(outlier_ids_list, use.names = FALSE)
+      outlier_study_ids <- unique(as.numeric(unlist(outlier_study_ids_list, use.names = FALSE)))
     } else {
       # Exclude outliers only from specified subgroups
       if (is.numeric(exclude.outliers.in.subgroups)) {
@@ -1625,12 +1648,18 @@ multiple.srocs.no <- function(dat,
       
       # Subset outlier_ids_list to only include specified subgroups
       outlier_ids_list_subset <- outlier_ids_list[subgroup_names %in% subgroup_names_to_exclude]
+      outlier_study_ids_list_subset <- outlier_study_ids_list[subgroup_names %in% subgroup_names_to_exclude]
       outlier_ids <- unlist(outlier_ids_list_subset, use.names = FALSE)
+      outlier_study_ids <- unique(as.numeric(unlist(outlier_study_ids_list_subset, use.names = FALSE)))
     }
+    
   }
   
   # Remove outlier studies from the dataframe
   if (length(outlier_ids) > 0) {
+    if(exclude_from_all_subgroups && length(subgroup.list) > 1){
+      outlier_ids <- as.vector(dat[dat[["Study No."]] %in% outlier_study_ids, ][["Model No."]])
+    }
     dat_no_outliers <- dat[!dat[["Model No."]] %in% outlier_ids, ]
   } else {
     dat_no_outliers <- dat
