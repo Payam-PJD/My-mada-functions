@@ -263,7 +263,7 @@ forest.diag.combined <- function(dat,
                                  xlim = c(50, 100),
                                  leftspace = "    ",
                                  rightspace = "        ",
-                                 ratio = if is.null(lcols2) c(0.55, 0.45) else if is.null(lcols2) c(0.63, 0.37) else c(.7,.3),
+                                 ratio = if (is.null(lcols2)) c(0.55, 0.45) else if (is.null(lcols2)) c(0.63, 0.37) else c(.7,.3),
                                  ...
                                  ) {
   # Prepare data
