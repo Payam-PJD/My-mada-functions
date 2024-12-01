@@ -1061,7 +1061,8 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
                            AUC.CI = F, # If true it also returns confidence interval for AUC. Be cautious since it takes ~ 2 minutes for each subgroup
                            n.boots = 500, # number of bootstraps for AUC CI
                            AUC.CI.object = NULL, # if you have already done auc ci calculation and have the results  as an object, place it here for faster implementation
-                           magnify = 2 # argument to magnify weight size of point estimates in the sroc
+                           magnify = 2, # argument to magnify weight size of point estimates in the sroc
+                           extrapolate = T
 ){
   on.exit(eval(quote(closeAllConnections()), envir = .GlobalEnv))
   n.cores <- detectCores() - 1
@@ -1108,7 +1109,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
   }
   if (length(subgroup.list)>1) {
     plot(reitsmas$subgroups[[valid.subgroup.list[1]]],
-         extrapolate = TRUE,
+         extrapolate = extrapolate,
          sroclwd = 2,
          predict = FALSE,
          pch = summary.pch.list[1],
@@ -1118,7 +1119,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
     )
   }else{
     plot(reitsmas$subgroups[[valid.subgroup.list[1]]],
-         extrapolate = TRUE,
+         extrapolate = extrapolate,
          sroclwd = 2,
          predict = FALSE,
          pch = summary.pch.list[1],
@@ -1135,7 +1136,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
              col = sroc.colors[1]
   )
   lines(sroc(reitsmas$subgroups[[valid.subgroup.list[1]]],
-             extrapolate = TRUE
+             extrapolate = extrapolate
   ),
   lty = 1,
   col = sroc.colors[1],
@@ -1153,7 +1154,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
   if (length(subgroup.list)>1){
     for (sg in 2:length(subgroup.list)){
       lines(sroc(reitsmas$subgroups[[valid.subgroup.list[sg]]],
-                 extrapolate = TRUE
+                 extrapolate = extrapolate
       ),
       lty = 1,
       col = sroc.colors[sg],
