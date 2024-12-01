@@ -1046,8 +1046,11 @@ AUC_boot_paralell <- function(TP, FP, FN, TN, B=2000, alpha=0.95)
 } #this is a version of dmeta tools AUC_CI with parallel bootstrapping
 
 
+
+
+
 multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
-                           subgrouping.variable = NULL, #dat$subgrouping variable (max is 6 subgroups but you can change it with making longer lists for the next 6 arguments)
+                           subgrouping.variable = NULL, #dat$subgrouping variable
                            sroc.colors = c("blue", "maroon", "black", "skyblue", "#20cb20", "red"), #colors for the sroc and summary estimates and ellipse 
                            points.colors = c("#0000FF20", "#A52A2A20","#1d1c1c20" ,"#87ceeb30", "#20cb2020", "#ff000350"),#colors for the point estimates
                            pch.list = c(16, 15, 17, 18, 15, 13), #shape for point estimate default is : c(1, 0, 2, 5, 7, 13)
@@ -1062,7 +1065,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
                            n.boots = 500, # number of bootstraps for AUC CI
                            AUC.CI.object = NULL, # if you have already done auc ci calculation and have the results  as an object, place it here for faster implementation
                            magnify = 2, # argument to magnify weight size of point estimates in the sroc
-                           extrapolate = T
+                           extrapolate = TRUE
 ){
   on.exit(eval(quote(closeAllConnections()), envir = .GlobalEnv))
   n.cores <- detectCores() - 1
@@ -1089,7 +1092,6 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
   summaries <- list()
   if (length(subgroup.list)>1){
     summaries$reitsma.overalll <- summary(reitsmas$reitssma.overall)
-    summaries$reitsma.reg.fit <- summary (reitsmas$reitsma.reg.fit)
     reitsmas$reitsma.reg.fit <- reitsma(data = dat, method = "ml", formula = cbind(tsens , tfpr) ~ dat[["subgrouping.variable"]])
     reitsmas$reitsma.intercept <- reitsma(data = dat, method = "ml", formula = cbind(tsens , tfpr) ~ 1)
     reitsmas$anova.reitsma <- anova(reitsmas$reitsma.reg.fit, reitsmas$reitsma.intercept)
@@ -1109,7 +1111,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
   }
   if (length(subgroup.list)>1) {
     plot(reitsmas$subgroups[[valid.subgroup.list[1]]],
-         extrapolate = extrapolate,
+         extrapolate = FALSE,
          sroclwd = 2,
          predict = FALSE,
          pch = summary.pch.list[1],
@@ -1119,7 +1121,7 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
     )
   }else{
     plot(reitsmas$subgroups[[valid.subgroup.list[1]]],
-         extrapolate = extrapolate,
+         extrapolate = FALSE,
          sroclwd = 2,
          predict = FALSE,
          pch = summary.pch.list[1],
@@ -1135,13 +1137,25 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
              add = TRUE,
              col = sroc.colors[1]
   )
-  lines(sroc(reitsmas$subgroups[[valid.subgroup.list[1]]],
-             extrapolate = extrapolate
-  ),
-  lty = 1,
-  col = sroc.colors[1],
-  lwd = 2
-  )
+  # Modify the lines(sroc(...)) call for the first subgroup
+  if (extrapolate == FALSE) {
+    fpr_values <- fpr(dat[which(dat[["subgrouping.variable"]] == subgroup.list[1]), ])
+    min_fpr <- max(min(fpr_values), 0.01) # Ensure min_fpr is at least 0.01
+    max_fpr <- min(max(fpr_values), 0.99) # Ensure max_fpr is at most 0.99
+    fpr_seq <- seq(min_fpr, max_fpr, length.out = 99)
+    lines(sroc(reitsmas$subgroups[[valid.subgroup.list[1]]],
+               fpr = fpr_seq),
+          lty = 1,
+          col = sroc.colors[1],
+          lwd = 2
+    )
+  } else {
+    lines(sroc(reitsmas$subgroups[[valid.subgroup.list[1]]]),
+          lty = 1,
+          col = sroc.colors[1],
+          lwd = 2
+    )
+  }
   if (plot.points){
     points(fpr(dat[which(dat[["subgrouping.variable"]] == subgroup.list[1]), ]),
            sens(dat[which(dat[["subgrouping.variable"]] == subgroup.list[1]), ]),
@@ -1153,13 +1167,25 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
   
   if (length(subgroup.list)>1){
     for (sg in 2:length(subgroup.list)){
-      lines(sroc(reitsmas$subgroups[[valid.subgroup.list[sg]]],
-                 extrapolate = extrapolate
-      ),
-      lty = 1,
-      col = sroc.colors[sg],
-      lwd = 2
-      )
+      # Modify the lines(sroc(...)) call for other subgroups
+      if (extrapolate == FALSE) {
+        fpr_values <- fpr(dat[which(dat[["subgrouping.variable"]] == subgroup.list[sg]), ])
+        min_fpr <- max(min(fpr_values), 0.01) # Ensure min_fpr is at least 0.01
+        max_fpr <- min(max(fpr_values), 0.99) # Ensure max_fpr is at most 0.99
+        fpr_seq <- seq(min_fpr, max_fpr, length.out = 99)
+        lines(sroc(reitsmas$subgroups[[valid.subgroup.list[sg]]],
+                   fpr = fpr_seq),
+              lty = 1,
+              col = sroc.colors[sg],
+              lwd = 2
+        )
+      } else {
+        lines(sroc(reitsmas$subgroups[[valid.subgroup.list[sg]]]),
+              lty = 1,
+              col = sroc.colors[sg],
+              lwd = 2
+        )
+      }
       ROCellipse(reitsmas$subgroups[[valid.subgroup.list[sg]]],
                  lty = ellipse.lty,
                  pch = summary.pch.list[sg],
@@ -1179,11 +1205,6 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
     }
   }
   
-  
-  
-  
-  
-  
   no.subgroups <- length(subgroup.list)
   legend.pch <- summary.pch.list[1:no.subgroups]
   legend.col <- sroc.colors[1:no.subgroups]
@@ -1196,10 +1217,10 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
     summary.sg <- summaries$subgroups[[valid.subgroup.list[sg]]]
     if(!AUC.CI){
       subgroups.auc.list[sg] <-  if (legend.AUC) paste(subgroup.list[sg],
-                                      " (AUC: ",
-                                      round(summary.sg$AUC$AUC, digits = 2),
-                                      ")",
-                                      sep = ""
+                                                       " (AUC: ",
+                                                       round(summary.sg$AUC$AUC, digits = 2),
+                                                       ")",
+                                                       sep = ""
       ) else subgroup.list[sg]
       
     } else {
@@ -1236,49 +1257,21 @@ multiple.srocs <- function(dat, # a dataset with TP, TN, FP, FN
            , lwd =1.5
     )
   }
-
+  
   # Check if there are multiple subgroups
-if (length(subgroup.list) > 1) {
+  if (length(subgroup.list) > 1) {
     # Loop over each subgroup
     for (sg in 1:length(subgroup.list)) {
-        subgroup_name <- subgroup.list[sg]
-        valid_name <- valid.subgroup.list[sg]
-        summary.sg <- summaries$subgroups[[valid_name]]
-        
-        # Extract AUC estimate
-        auc_estimate <- summary.sg$AUC$AUC
-        
-        if (AUC.CI) {
-            # Confidence intervals are stored in AUC_CIs
-            auc_ci <- AUC_CIs[[valid_name]]$CI
-            auc_lower <- auc_ci[1]
-            auc_upper <- auc_ci[2]
-            
-            # Format to 2 decimal places
-            auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
-            auc_lower_formatted <- sprintf("%.2f", auc_lower)
-            auc_upper_formatted <- sprintf("%.2f", auc_upper)
-            
-            # Print AUC with confidence intervals
-            cat("\nSubgroup:", subgroup_name, "\n")
-            cat("  AUC:", auc_estimate_formatted, "(95% CI:", auc_lower_formatted, "-", auc_upper_formatted, ")\n")
-        } else {
-            # Format AUC estimate to 2 decimal places
-            auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
-            
-            # Print AUC without confidence intervals
-            cat("\nSubgroup:", subgroup_name, "\n")
-            cat("  AUC:", auc_estimate_formatted, "\n")
-        }
-    }
-} else {
-    # Only one subgroup or overall data
-    summary.overall <- summaries$subgroups[[valid.subgroup.list[1]]]
-    auc_estimate <- summary.overall$AUC$AUC
-    
-    if (AUC.CI) {
+      subgroup_name <- subgroup.list[sg]
+      valid_name <- valid.subgroup.list[sg]
+      summary.sg <- summaries$subgroups[[valid_name]]
+      
+      # Extract AUC estimate
+      auc_estimate <- summary.sg$AUC$AUC
+      
+      if (AUC.CI) {
         # Confidence intervals are stored in AUC_CIs
-        auc_ci <- AUC_CIs[[valid.subgroup.list[1]]]$CI
+        auc_ci <- AUC_CIs[[valid_name]]$CI
         auc_lower <- auc_ci[1]
         auc_upper <- auc_ci[2]
         
@@ -1288,15 +1281,43 @@ if (length(subgroup.list) > 1) {
         auc_upper_formatted <- sprintf("%.2f", auc_upper)
         
         # Print AUC with confidence intervals
-        cat("AUC:", auc_estimate_formatted, "(95% CI:", auc_lower_formatted, "-", auc_upper_formatted, ")\n")
-    } else {
+        cat("\nSubgroup:", subgroup_name, "\n")
+        cat("  AUC:", auc_estimate_formatted, "(95% CI:", auc_lower_formatted, "-", auc_upper_formatted, ")\n")
+      } else {
         # Format AUC estimate to 2 decimal places
         auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
         
         # Print AUC without confidence intervals
-        cat("AUC:", auc_estimate_formatted, "\n")
+        cat("\nSubgroup:", subgroup_name, "\n")
+        cat("  AUC:", auc_estimate_formatted, "\n")
+      }
     }
-}       
+  } else {
+    # Only one subgroup or overall data
+    summary.overall <- summaries$subgroups[[valid.subgroup.list[1]]]
+    auc_estimate <- summary.overall$AUC$AUC
+    
+    if (AUC.CI) {
+      # Confidence intervals are stored in AUC_CIs
+      auc_ci <- AUC_CIs[[valid.subgroup.list[1]]]$CI
+      auc_lower <- auc_ci[1]
+      auc_upper <- auc_ci[2]
+      
+      # Format to 2 decimal places
+      auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
+      auc_lower_formatted <- sprintf("%.2f", auc_lower)
+      auc_upper_formatted <- sprintf("%.2f", auc_upper)
+      
+      # Print AUC with confidence intervals
+      cat("AUC:", auc_estimate_formatted, "(95% CI:", auc_lower_formatted, "-", auc_upper_formatted, ")\n")
+    } else {
+      # Format AUC estimate to 2 decimal places
+      auc_estimate_formatted <- sprintf("%.2f", auc_estimate)
+      
+      # Print AUC without confidence intervals
+      cat("AUC:", auc_estimate_formatted, "\n")
+    }
+  }       
   if (object.return){
     returned.object <- list()
     returned.object$reitsmas <- reitsmas
@@ -1322,6 +1343,8 @@ if (length(subgroup.list) > 1) {
     }
   }
 }
+
+                                 
 
 dta.outliers <- function(dat, object.return = FALSE) {
   dat <- dat[which(!is.na(dat[["TP"]]) & !is.na(dat[["TN"]]) & 
