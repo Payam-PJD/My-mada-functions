@@ -2351,9 +2351,9 @@ nomogrammer_cutoffs <- function(DM_object, cutoffs = DM_object$optcut, x_var = .
       return(plots)
     }
     else{
-      combined_plot <- wrap_plots(plots, ncol = length(cutoffs), )
-      return(combined_plot)
-      print(combined_plot) # Print the combined plot
+        combined_plot <- wrap_plots(plots, ncol = length(prevalence))  # no comma at the end
+        print(combined_plot)                                           # put this before return()
+        return(combined_plot)
     }
   }
 }
